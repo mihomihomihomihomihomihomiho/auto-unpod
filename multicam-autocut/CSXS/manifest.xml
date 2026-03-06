@@ -41,13 +41,17 @@
           <Menu>話者別 自動カット割</Menu>
           <Geometry>
             <Size>
-              <Height>500</Height>
-              <Width>400</Width>
+              <Height>600</Height>
+              <Width>420</Width>
             </Size>
             <MinSize>
-              <Height>400</Height>
-              <Width>350</Width>
+              <Height>500</Height>
+              <Width>380</Width>
             </MinSize>
+            <MaxSize>
+              <Height>1200</Height>
+              <Width>800</Width>
+            </MaxSize>
           </Geometry>
           <Icons>
           </Icons>
