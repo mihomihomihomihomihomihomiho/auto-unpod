@@ -170,41 +170,50 @@ function applyMulticamCuts(jsonPath) {
                         }
                     }
 
-                    // Set the multicam angle using QE DOM
+                    logFile.writeln("Clip " + clipIndex + ": target camera = " + targetCamera);
+
                     // Camera angles are 0-indexed (camera 1 = index 0)
                     var angleIndex = targetCamera - 1;
 
                     try {
-                        var qeTrack = qe.project.getActiveSequence().getVideoTrackAt(0);
-                        var qeClip = qeTrack.getItemAt(clipIndex);
+                        // Use standard ExtendScript API for multicam clips
+                        logFile.writeln("  Clip type: " + clip.projectItem.type);
+                        logFile.writeln("  Has projectItem: " + (clip.projectItem !== null));
 
-                        logFile.writeln("Clip " + clipIndex + ": target camera = " + targetCamera);
-                        logFile.writeln("  Has qeClip: " + (qeClip !== null));
+                        if (clip.projectItem && clip.projectItem.type === ProjectItemType.CLIP) {
+                            // Check if it's a multicam clip
+                            var isMulticam = false;
+                            try {
+                                // Try to access multicam properties
+                                if (clip.multicamClip) {
+                                    isMulticam = true;
+                                    logFile.writeln("  Is multicam: true (has multicamClip property)");
 
-                        if (qeClip) {
-                            // Check available methods
-                            logFile.writeln("  Has setActiveAngle: " + (typeof qeClip.setActiveAngle === 'function'));
-                            logFile.writeln("  Has setSelectedMulticamAngle: " + (typeof qeClip.setSelectedMulticamAngle === 'function'));
-
-                            // List all available properties/methods
-                            logFile.writeln("  Available properties:");
-                            for (var prop in qeClip) {
-                                logFile.writeln("    - " + prop + " (" + typeof qeClip[prop] + ")");
+                                    // Set the active angle
+                                    clip.multicamClip.activeAngle = angleIndex;
+                                    result.cutsApplied++;
+                                    logFile.writeln("  SUCCESS: Set activeAngle to " + angleIndex);
+                                }
+                            } catch (mcError) {
+                                logFile.writeln("  Error checking multicam: " + mcError.toString());
                             }
 
-                            // Try different methods that might work
-                            if (typeof qeClip.setActiveAngle === 'function') {
-                                qeClip.setActiveAngle(angleIndex);
-                                result.cutsApplied++;
-                                logFile.writeln("  SUCCESS: Used setActiveAngle()");
-                            } else if (typeof qeClip.setSelectedMulticamAngle === 'function') {
-                                qeClip.setSelectedMulticamAngle(angleIndex);
-                                result.cutsApplied++;
-                                logFile.writeln("  SUCCESS: Used setSelectedMulticamAngle()");
-                            } else {
-                                $.writeln("Warning: No angle switching method found for clip " + clipIndex);
-                                logFile.writeln("  ERROR: No angle switching method found");
+                            if (!isMulticam) {
+                                // Try alternative approach: use projectItem
+                                try {
+                                    if (typeof clip.projectItem.setMulticamActiveAngle === 'function') {
+                                        clip.projectItem.setMulticamActiveAngle(angleIndex);
+                                        result.cutsApplied++;
+                                        logFile.writeln("  SUCCESS: Used setMulticamActiveAngle()");
+                                    } else {
+                                        logFile.writeln("  No multicam methods found on projectItem");
+                                    }
+                                } catch (piError) {
+                                    logFile.writeln("  Error with projectItem: " + piError.toString());
+                                }
                             }
+                        } else {
+                            logFile.writeln("  Not a clip type or no projectItem");
                         }
                     } catch (e) {
                         $.writeln("Warning: Failed to set angle for clip " + clipIndex + ": " + e.toString());
