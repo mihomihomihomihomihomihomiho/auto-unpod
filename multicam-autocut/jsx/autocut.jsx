@@ -142,6 +142,14 @@ function applyMulticamCuts(jsonPath) {
 
             $.writeln("Processing " + numClips + " clips on track");
 
+            // Debug: Write log to file
+            var logPath = "/tmp/multicam_debug.log";
+            var logFile = new File(logPath);
+            logFile.open('w');
+            logFile.writeln("=== Multicam Angle Switching Debug ===");
+            logFile.writeln("Total clips: " + numClips);
+            logFile.writeln("");
+
             // Process each clip on the timeline
             for (var clipIndex = 0; clipIndex < numClips; clipIndex++) {
                 try {
@@ -166,25 +174,47 @@ function applyMulticamCuts(jsonPath) {
                         var qeTrack = qe.project.getActiveSequence().getVideoTrackAt(0);
                         var qeClip = qeTrack.getItemAt(clipIndex);
 
+                        logFile.writeln("Clip " + clipIndex + ": target camera = " + targetCamera);
+                        logFile.writeln("  Has qeClip: " + (qeClip !== null));
+
                         if (qeClip) {
+                            // Check available methods
+                            logFile.writeln("  Has setActiveAngle: " + (typeof qeClip.setActiveAngle === 'function'));
+                            logFile.writeln("  Has setSelectedMulticamAngle: " + (typeof qeClip.setSelectedMulticamAngle === 'function'));
+
+                            // List all available properties/methods
+                            logFile.writeln("  Available properties:");
+                            for (var prop in qeClip) {
+                                logFile.writeln("    - " + prop + " (" + typeof qeClip[prop] + ")");
+                            }
+
                             // Try different methods that might work
                             if (typeof qeClip.setActiveAngle === 'function') {
                                 qeClip.setActiveAngle(angleIndex);
                                 result.cutsApplied++;
+                                logFile.writeln("  SUCCESS: Used setActiveAngle()");
                             } else if (typeof qeClip.setSelectedMulticamAngle === 'function') {
                                 qeClip.setSelectedMulticamAngle(angleIndex);
                                 result.cutsApplied++;
+                                logFile.writeln("  SUCCESS: Used setSelectedMulticamAngle()");
                             } else {
                                 $.writeln("Warning: No angle switching method found for clip " + clipIndex);
+                                logFile.writeln("  ERROR: No angle switching method found");
                             }
                         }
                     } catch (e) {
                         $.writeln("Warning: Failed to set angle for clip " + clipIndex + ": " + e.toString());
+                        logFile.writeln("  EXCEPTION: " + e.toString());
                     }
                 } catch (e) {
                     $.writeln("Warning: Failed to process clip " + clipIndex + ": " + e.toString());
+                    logFile.writeln("EXCEPTION processing clip " + clipIndex + ": " + e.toString());
                 }
             }
+
+            logFile.writeln("");
+            logFile.writeln("Total cuts applied: " + result.cutsApplied);
+            logFile.close();
 
             result.success = true;
 
