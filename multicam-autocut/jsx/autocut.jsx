@@ -148,21 +148,27 @@ function applyMulticamCuts(jsonPath) {
                     // Find clip at this time on multicam track
                     var clip = findClipAtTime(multicamTrack, startTicks);
 
-                    if (clip && clip.projectItem) {
-                        // Check if it's a multicam clip
-                        if (clip.projectItem.type === ProjectItemType.CLIP) {
-                            // Set multicam angle
-                            // Note: Camera angles are 0-indexed in API
+                    if (clip) {
+                        try {
+                            // Set multicam angle directly on the clip
+                            // Note: Camera angles are 0-indexed in API (camera 1 = index 0)
                             var angleIndex = camera - 1;
 
-                            try {
-                                clip.projectItem.setActiveMultiCamAngle(angleIndex);
-                                result.cutsApplied++;
-                            } catch (e) {
-                                // This clip might not be multicam, or angle doesn't exist
-                                $.writeln("Warning: Failed to set camera angle for clip at " + segment.startTime + "s: " + e.toString());
+                            // Use the multicam clip node API
+                            if (clip.nodeId) {
+                                var qeClip = qe.project.getActiveSequence().getVideoTrackAt(0).getItemAt(i);
+                                if (qeClip) {
+                                    qeClip.setSelectedMulticamAngle(angleIndex);
+                                    result.cutsApplied++;
+                                }
+                            } else {
+                                $.writeln("Warning: Clip at " + segment.startTime + "s has no nodeId");
                             }
+                        } catch (e) {
+                            $.writeln("Warning: Failed to set camera angle for clip at " + segment.startTime + "s: " + e.toString());
                         }
+                    } else {
+                        $.writeln("Warning: No clip found at " + segment.startTime + "s");
                     }
                 } catch (e) {
                     $.writeln("Warning: Failed to process segment at " + segment.startTime + "s: " + e.toString());
