@@ -316,8 +316,8 @@ function runPythonAnalysis(file1, file2, threshold, minDuration) {
             '--output', outputPath
         ];
 
-        // Try python3 first, then python
-        let pythonCmd = 'python3';
+        // Try Homebrew python3 first (macOS), then system python3, then python
+        let pythonCmd = '/opt/homebrew/bin/python3';
         let process = null;
         let processTimeout = null;
         const PROCESS_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -325,14 +325,20 @@ function runPythonAnalysis(file1, file2, threshold, minDuration) {
         try {
             process = childProcess.spawn(pythonCmd, args);
         } catch (err) {
-            logWarning('python3 が見つかりません。python を試します...');
-            pythonCmd = 'python';
+            logWarning('Homebrew python3 が見つかりません。システムの python3 を試します...');
+            pythonCmd = 'python3';
             try {
                 process = childProcess.spawn(pythonCmd, args);
             } catch (err2) {
-                cleanupTempFiles();
-                reject(new Error('Python が見つかりません。Python 3.7+ をインストールしてください'));
-                return;
+                logWarning('python3 が見つかりません。python を試します...');
+                pythonCmd = 'python';
+                try {
+                    process = childProcess.spawn(pythonCmd, args);
+                } catch (err3) {
+                    cleanupTempFiles();
+                    reject(new Error('Python が見つかりません。Python 3.7+ をインストールしてください'));
+                    return;
+                }
             }
         }
 
