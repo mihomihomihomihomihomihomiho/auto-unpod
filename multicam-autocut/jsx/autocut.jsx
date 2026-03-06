@@ -130,7 +130,7 @@ function applyMulticamCuts(jsonPath) {
             }
 
             // Now assign camera angles to segments
-            // Process from beginning this time
+            // After applying razor cuts, iterate through all clips on the track
             var videoTracks = activeSequence.videoTracks;
             if (videoTracks.numTracks === 0) {
                 throw new Error("シーケンスにビデオトラックがありません");
@@ -138,40 +138,51 @@ function applyMulticamCuts(jsonPath) {
 
             // Find the multicam track (usually V1)
             var multicamTrack = videoTracks[0];
+            var numClips = multicamTrack.clips.numItems;
 
-            for (var i = 0; i < cuts.length; i++) {
-                var segment = cuts[i];
-                var startTicks = secondsToTicks(segment.startTime);
-                var camera = segment.camera;
+            $.writeln("Processing " + numClips + " clips on track");
 
+            // Process each clip on the timeline
+            for (var clipIndex = 0; clipIndex < numClips; clipIndex++) {
                 try {
-                    // Find clip at this time on multicam track
-                    var clip = findClipAtTime(multicamTrack, startTicks);
+                    var clip = multicamTrack.clips[clipIndex];
+                    var clipStartTicks = parseFloat(clip.start.ticks);
 
-                    if (clip) {
-                        try {
-                            // Set multicam angle directly on the clip
-                            // Note: Camera angles are 0-indexed in API (camera 1 = index 0)
-                            var angleIndex = camera - 1;
-
-                            // Use the multicam clip node API
-                            if (clip.nodeId) {
-                                var qeClip = qe.project.getActiveSequence().getVideoTrackAt(0).getItemAt(i);
-                                if (qeClip) {
-                                    qeClip.setSelectedMulticamAngle(angleIndex);
-                                    result.cutsApplied++;
-                                }
-                            } else {
-                                $.writeln("Warning: Clip at " + segment.startTime + "s has no nodeId");
-                            }
-                        } catch (e) {
-                            $.writeln("Warning: Failed to set camera angle for clip at " + segment.startTime + "s: " + e.toString());
+                    // Find which camera should be active at this clip's start time
+                    var targetCamera = 1; // default
+                    for (var cutIndex = cuts.length - 1; cutIndex >= 0; cutIndex--) {
+                        var cutStartTicks = parseFloat(secondsToTicks(cuts[cutIndex].startTime));
+                        if (clipStartTicks >= cutStartTicks) {
+                            targetCamera = cuts[cutIndex].camera;
+                            break;
                         }
-                    } else {
-                        $.writeln("Warning: No clip found at " + segment.startTime + "s");
+                    }
+
+                    // Set the multicam angle using QE DOM
+                    // Camera angles are 0-indexed (camera 1 = index 0)
+                    var angleIndex = targetCamera - 1;
+
+                    try {
+                        var qeTrack = qe.project.getActiveSequence().getVideoTrackAt(0);
+                        var qeClip = qeTrack.getItemAt(clipIndex);
+
+                        if (qeClip) {
+                            // Try different methods that might work
+                            if (typeof qeClip.setActiveAngle === 'function') {
+                                qeClip.setActiveAngle(angleIndex);
+                                result.cutsApplied++;
+                            } else if (typeof qeClip.setSelectedMulticamAngle === 'function') {
+                                qeClip.setSelectedMulticamAngle(angleIndex);
+                                result.cutsApplied++;
+                            } else {
+                                $.writeln("Warning: No angle switching method found for clip " + clipIndex);
+                            }
+                        }
+                    } catch (e) {
+                        $.writeln("Warning: Failed to set angle for clip " + clipIndex + ": " + e.toString());
                     }
                 } catch (e) {
-                    $.writeln("Warning: Failed to process segment at " + segment.startTime + "s: " + e.toString());
+                    $.writeln("Warning: Failed to process clip " + clipIndex + ": " + e.toString());
                 }
             }
 
