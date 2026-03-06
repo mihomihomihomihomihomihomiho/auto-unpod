@@ -96,24 +96,8 @@ function applyMulticamCuts(jsonPath) {
         }
 
         try {
-            // Process cuts from end to beginning to avoid offset issues
+            // NEW APPROACH: Set keyframes on multicam clip instead of using razor
             var cuts = cutData.cuts;
-            var cutsToApply = [];
-
-            // Collect all cut points (skip first cut at 0.0)
-            for (var i = 1; i < cuts.length; i++) {
-                var cutTime = cuts[i].startTime;
-                cutsToApply.push({
-                    time: cutTime,
-                    camera: cuts[i].camera,
-                    index: i
-                });
-            }
-
-            // Sort by time (descending) to process from end to beginning
-            cutsToApply.sort(function(a, b) {
-                return b.time - a.time;
-            });
 
             // Debug: Write log to file (use Desktop for easier access)
             var logPath = "~/Desktop/multicam_debug.log";
@@ -123,130 +107,109 @@ function applyMulticamCuts(jsonPath) {
                 result.error = "ログファイルの作成に失敗しました";
                 return JSON.stringify(result);
             }
-            logFile.writeln("=== Multicam Razor Debug ===");
-            logFile.writeln("Cuts to apply: " + cutsToApply.length);
+            logFile.writeln("=== Multicam Keyframe Approach ===");
+            logFile.writeln("Total cuts: " + cuts.length);
             logFile.writeln("");
 
-            // Apply razor cuts
-            var razorSuccessCount = 0;
-            var razorFailCount = 0;
-            for (var i = 0; i < cutsToApply.length; i++) {
-                var cut = cutsToApply[i];
-                var timeTicks = secondsToTicks(cut.time);
-
-                try {
-                    // Apply razor at cut point
-                    qeSequence.razor(timeTicks);
-                    razorSuccessCount++;
-                    if (i < 5 || i >= cutsToApply.length - 5) {
-                        // Log first and last 5 cuts
-                        logFile.writeln("Razor " + i + ": SUCCESS at " + cut.time + "s (" + timeTicks + " ticks)");
-                    }
-                } catch (e) {
-                    // Log error but continue with other cuts
-                    razorFailCount++;
-                    $.writeln("Warning: Failed to apply cut at " + cut.time + "s: " + e.toString());
-                    if (i < 5 || razorFailCount < 10) {
-                        // Log first few failures
-                        logFile.writeln("Razor " + i + ": FAILED at " + cut.time + "s - " + e.toString());
-                    }
-                }
-            }
-
-            logFile.writeln("");
-            logFile.writeln("Razor results: " + razorSuccessCount + " success, " + razorFailCount + " failed");
-            logFile.writeln("");
-
-            // Now assign camera angles to segments
-            // After applying razor cuts, iterate through all clips on the track
+            // Get the multicam clip
             var videoTracks = activeSequence.videoTracks;
             if (videoTracks.numTracks === 0) {
                 throw new Error("シーケンスにビデオトラックがありません");
             }
 
-            // Find the multicam track (usually V1)
             var multicamTrack = videoTracks[0];
-            var numClips = multicamTrack.clips.numItems;
+            if (multicamTrack.clips.numItems === 0) {
+                throw new Error("V1トラックにクリップがありません");
+            }
 
-            $.writeln("Processing " + numClips + " clips on track");
-
-            logFile.writeln("=== Multicam Angle Switching ===");
-            logFile.writeln("Total clips after razor: " + numClips);
+            var clip = multicamTrack.clips[0]; // Assuming single multicam clip
+            logFile.writeln("Clip name: " + clip.name);
+            logFile.writeln("Clip type: " + clip.projectItem.type);
             logFile.writeln("");
 
-            // Process each clip on the timeline
-            for (var clipIndex = 0; clipIndex < numClips; clipIndex++) {
-                try {
-                    var clip = multicamTrack.clips[clipIndex];
-                    var clipStartTicks = parseFloat(clip.start.ticks);
+            // Find the Multicam effect component
+            var components = clip.components;
+            logFile.writeln("Total components: " + components.numItems);
 
-                    // Find which camera should be active at this clip's start time
-                    var targetCamera = 1; // default
-                    for (var cutIndex = cuts.length - 1; cutIndex >= 0; cutIndex--) {
-                        var cutStartTicks = parseFloat(secondsToTicks(cuts[cutIndex].startTime));
-                        if (clipStartTicks >= cutStartTicks) {
-                            targetCamera = cuts[cutIndex].camera;
-                            break;
-                        }
-                    }
+            var multicamComponent = null;
+            for (var i = 0; i < components.numItems; i++) {
+                var component = components[i];
+                logFile.writeln("Component " + i + ": " + component.displayName);
 
-                    logFile.writeln("Clip " + clipIndex + ": target camera = " + targetCamera);
-
-                    // Camera angles are 0-indexed (camera 1 = index 0)
-                    var angleIndex = targetCamera - 1;
-
-                    try {
-                        // Use standard ExtendScript API for multicam clips
-                        logFile.writeln("  Clip type: " + clip.projectItem.type);
-                        logFile.writeln("  Has projectItem: " + (clip.projectItem !== null));
-
-                        if (clip.projectItem && clip.projectItem.type === ProjectItemType.CLIP) {
-                            // Check if it's a multicam clip
-                            var isMulticam = false;
-                            try {
-                                // Try to access multicam properties
-                                if (clip.multicamClip) {
-                                    isMulticam = true;
-                                    logFile.writeln("  Is multicam: true (has multicamClip property)");
-
-                                    // Set the active angle
-                                    clip.multicamClip.activeAngle = angleIndex;
-                                    result.cutsApplied++;
-                                    logFile.writeln("  SUCCESS: Set activeAngle to " + angleIndex);
-                                }
-                            } catch (mcError) {
-                                logFile.writeln("  Error checking multicam: " + mcError.toString());
-                            }
-
-                            if (!isMulticam) {
-                                // Try alternative approach: use projectItem
-                                try {
-                                    if (typeof clip.projectItem.setMulticamActiveAngle === 'function') {
-                                        clip.projectItem.setMulticamActiveAngle(angleIndex);
-                                        result.cutsApplied++;
-                                        logFile.writeln("  SUCCESS: Used setMulticamActiveAngle()");
-                                    } else {
-                                        logFile.writeln("  No multicam methods found on projectItem");
-                                    }
-                                } catch (piError) {
-                                    logFile.writeln("  Error with projectItem: " + piError.toString());
-                                }
-                            }
-                        } else {
-                            logFile.writeln("  Not a clip type or no projectItem");
-                        }
-                    } catch (e) {
-                        $.writeln("Warning: Failed to set angle for clip " + clipIndex + ": " + e.toString());
-                        logFile.writeln("  EXCEPTION: " + e.toString());
-                    }
-                } catch (e) {
-                    $.writeln("Warning: Failed to process clip " + clipIndex + ": " + e.toString());
-                    logFile.writeln("EXCEPTION processing clip " + clipIndex + ": " + e.toString());
+                // Look for multicam-related component
+                if (component.displayName.indexOf("Multicam") !== -1 ||
+                    component.displayName.indexOf("マルチカメラ") !== -1) {
+                    multicamComponent = component;
+                    logFile.writeln("  -> Found multicam component!");
+                    break;
                 }
             }
 
+            if (!multicamComponent) {
+                logFile.writeln("");
+                logFile.writeln("ERROR: Multicam component not found");
+                logFile.close();
+                throw new Error("マルチカメラコンポーネントが見つかりませんでした");
+            }
+
+            // Find the camera selection property
+            var properties = multicamComponent.properties;
             logFile.writeln("");
-            logFile.writeln("Total cuts applied: " + result.cutsApplied);
+            logFile.writeln("Multicam component properties: " + properties.numItems);
+
+            var cameraProperty = null;
+            for (var i = 0; i < properties.numItems; i++) {
+                var prop = properties[i];
+                logFile.writeln("Property " + i + ": " + prop.displayName);
+
+                // Look for camera/angle selection property
+                if (prop.displayName.indexOf("Camera") !== -1 ||
+                    prop.displayName.indexOf("Angle") !== -1 ||
+                    prop.displayName.indexOf("カメラ") !== -1 ||
+                    prop.displayName.indexOf("アングル") !== -1) {
+                    cameraProperty = prop;
+                    logFile.writeln("  -> Found camera property!");
+                    break;
+                }
+            }
+
+            if (!cameraProperty) {
+                logFile.writeln("");
+                logFile.writeln("ERROR: Camera property not found");
+                logFile.close();
+                throw new Error("カメラ選択プロパティが見つかりませんでした");
+            }
+
+            // Set keyframes for each cut
+            logFile.writeln("");
+            logFile.writeln("Setting keyframes...");
+
+            var keyframesSet = 0;
+            for (var i = 0; i < cuts.length; i++) {
+                var cut = cuts[i];
+                var timeTicks = secondsToTicks(cut.startTime);
+                var camera = cut.camera;
+
+                try {
+                    // Camera angles in Premiere are 1-indexed (1, 2, 3...)
+                    cameraProperty.setValueAtTime(timeTicks, camera);
+                    keyframesSet++;
+
+                    if (i < 5 || i >= cuts.length - 5) {
+                        logFile.writeln("Keyframe " + i + ": camera=" + camera + " at " + cut.startTime + "s");
+                    }
+                } catch (e) {
+                    logFile.writeln("ERROR setting keyframe " + i + ": " + e.toString());
+                    if (keyframesSet === 0 && i < 10) {
+                        // Log first few errors in detail
+                        $.writeln("Failed to set keyframe at " + cut.startTime + "s: " + e.toString());
+                    }
+                }
+            }
+
+            result.cutsApplied = keyframesSet;
+            logFile.writeln("");
+            logFile.writeln("Total keyframes set: " + keyframesSet);
             logFile.close();
 
             result.success = true;
