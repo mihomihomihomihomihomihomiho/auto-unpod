@@ -95,9 +95,6 @@ function applyMulticamCuts(jsonPath) {
             return JSON.stringify(result);
         }
 
-        // Start undo group
-        app.project.startUndoGroup("マルチカム自動カット割");
-
         try {
             // Process cuts from end to beginning to avoid offset issues
             var cuts = cutData.cuts;
@@ -176,9 +173,6 @@ function applyMulticamCuts(jsonPath) {
 
         } catch (e) {
             result.error = "カット割適用中にエラーが発生しました: " + e.toString();
-        } finally {
-            // End undo group
-            app.project.endUndoGroup();
         }
 
     } catch (e) {
