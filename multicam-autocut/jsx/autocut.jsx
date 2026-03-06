@@ -115,7 +115,21 @@ function applyMulticamCuts(jsonPath) {
                 return b.time - a.time;
             });
 
+            // Debug: Write log to file (use Desktop for easier access)
+            var logPath = "~/Desktop/multicam_debug.log";
+            var logFile = new File(logPath);
+            if (!logFile.open('w')) {
+                $.writeln("ERROR: Failed to open log file at " + logPath);
+                result.error = "ログファイルの作成に失敗しました";
+                return JSON.stringify(result);
+            }
+            logFile.writeln("=== Multicam Razor Debug ===");
+            logFile.writeln("Cuts to apply: " + cutsToApply.length);
+            logFile.writeln("");
+
             // Apply razor cuts
+            var razorSuccessCount = 0;
+            var razorFailCount = 0;
             for (var i = 0; i < cutsToApply.length; i++) {
                 var cut = cutsToApply[i];
                 var timeTicks = secondsToTicks(cut.time);
@@ -123,11 +137,25 @@ function applyMulticamCuts(jsonPath) {
                 try {
                     // Apply razor at cut point
                     qeSequence.razor(timeTicks);
+                    razorSuccessCount++;
+                    if (i < 5 || i >= cutsToApply.length - 5) {
+                        // Log first and last 5 cuts
+                        logFile.writeln("Razor " + i + ": SUCCESS at " + cut.time + "s (" + timeTicks + " ticks)");
+                    }
                 } catch (e) {
                     // Log error but continue with other cuts
+                    razorFailCount++;
                     $.writeln("Warning: Failed to apply cut at " + cut.time + "s: " + e.toString());
+                    if (i < 5 || razorFailCount < 10) {
+                        // Log first few failures
+                        logFile.writeln("Razor " + i + ": FAILED at " + cut.time + "s - " + e.toString());
+                    }
                 }
             }
+
+            logFile.writeln("");
+            logFile.writeln("Razor results: " + razorSuccessCount + " success, " + razorFailCount + " failed");
+            logFile.writeln("");
 
             // Now assign camera angles to segments
             // After applying razor cuts, iterate through all clips on the track
@@ -142,16 +170,8 @@ function applyMulticamCuts(jsonPath) {
 
             $.writeln("Processing " + numClips + " clips on track");
 
-            // Debug: Write log to file (use Desktop for easier access)
-            var logPath = "~/Desktop/multicam_debug.log";
-            var logFile = new File(logPath);
-            if (!logFile.open('w')) {
-                $.writeln("ERROR: Failed to open log file at " + logPath);
-                result.error = "ログファイルの作成に失敗しました";
-                return JSON.stringify(result);
-            }
-            logFile.writeln("=== Multicam Angle Switching Debug ===");
-            logFile.writeln("Total clips: " + numClips);
+            logFile.writeln("=== Multicam Angle Switching ===");
+            logFile.writeln("Total clips after razor: " + numClips);
             logFile.writeln("");
 
             // Process each clip on the timeline
