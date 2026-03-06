@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>話者別 自動カット割</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2b2b2b;
+            color: #d4d4d4;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #e0e0e0;
+            border-bottom: 1px solid #404040;
+            padding-bottom: 8px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            background: #323232;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #404040;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+        }
+
+        .file-input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .file-path {
+            flex: 1;
+            background: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 3px;
+            padding: 6px 10px;
+            color: #d4d4d4;
+            font-size: 12px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-path.empty {
+            color: #808080;
+            font-style: italic;
+        }
+
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1177bb;
+        }
+
+        button:active {
+            background: #0d5689;
+        }
+
+        button:disabled {
+            background: #505050;
+            color: #808080;
+            cursor: not-allowed;
+        }
+
+        .slider-group {
+            margin-bottom: 12px;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .slider-value {
+            color: #569cd6;
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: #404040;
+            outline: none;
+            border-radius: 2px;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #0e639c;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #1177bb;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: #0e639c;
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+
+        .execute-btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            background: #0e639c;
+        }
+
+        .execute-btn:hover:not(:disabled) {
+            background: #1177bb;
+        }
+
+        .progress-container {
+            margin-top: 16px;
+            display: none;
+        }
+
+        .progress-container.visible {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #1e1e1e;
+            border-radius: 3px;
+            border: 1px solid #404040;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0e639c 0%, #1177bb 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .log-container {
+            margin-top: 16px;
+            background: #1e1e1e;
+            border: 1px solid #404040;
+            border-radius: 3px;
+            padding: 8px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .log-entry.info {
+            color: #d4d4d4;
+        }
+
+        .log-entry.success {
+            color: #4ec9b0;
+        }
+
+        .log-entry.error {
+            color: #f48771;
+        }
+
+        .log-entry.warning {
+            color: #dcdcaa;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #505050;
+        }
+    </style>
+</head>
+<body>
+    <h1>話者別 自動カット割</h1>
+
+    <div class="section">
+        <div class="section-title">話者 1 / V1 トラック</div>
+        <div class="file-input-group">
+            <div class="file-path empty" id="speaker1Path">ファイルを選択してください...</div>
+            <button onclick="selectFile('speaker1')">選択</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">話者 2 / V2 トラック</div>
+        <div class="file-input-group">
+            <div class="file-path empty" id="speaker2Path">ファイルを選択してください...</div>
+            <button onclick="selectFile('speaker2')">選択</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>音声検出しきい値</span>
+                <span class="slider-value" id="thresholdValue">-38 dBFS</span>
+            </div>
+            <input type="range" id="threshold" min="-50" max="-20" value="-38" step="1" oninput="updateThreshold()">
+        </div>
+
+        <div class="slider-group">
+            <div class="slider-label">
+                <span>最小カット長</span>
+                <span class="slider-value" id="minDurationValue">1.0 秒</span>
+            </div>
+            <input type="range" id="minDuration" min="0.5" max="3.0" value="1.0" step="0.1" oninput="updateMinDuration()">
+        </div>
+    </div>
+
+    <button class="execute-btn" id="executeBtn" onclick="executeAutoCut()">▶ 自動カット割を実行</button>
+
+    <div class="progress-container" id="progressContainer">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+    </div>
+
+    <div class="log-container" id="logContainer"></div>
+
+    <script type="text/javascript" src="lib/CSInterface.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

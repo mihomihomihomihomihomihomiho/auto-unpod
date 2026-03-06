@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.henkaku.multicam.autocut" ExtensionBundleVersion="1.0.0" ExtensionBundleName="Multicam Auto-Cut">
+  <Author>Henkaku</Author>
+  <Contact>info@henkaku.ai</Contact>
+  <Legal>Copyright 2025 Henkaku. All rights reserved.</Legal>
+  <Abstract>Automatic multicam cutting based on speaker voice activity detection</Abstract>
+
+  <ExtensionList>
+    <Extension Id="com.henkaku.multicam.autocut.panel" Version="1.0.0"/>
+  </ExtensionList>
+
+  <ExecutionEnvironment>
+    <HostList>
+      <!-- Premiere Pro 22.0 and later -->
+      <Host Name="PPRO" Version="[22.0,99.9]"/>
+    </HostList>
+    <LocaleList>
+      <Locale Code="All"/>
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="11.0"/>
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+
+  <DispatchInfoList>
+    <Extension Id="com.henkaku.multicam.autocut.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+          <ScriptPath>./jsx/autocut.jsx</ScriptPath>
+          <CEFCommandLine>
+            <Parameter>--enable-nodejs</Parameter>
+            <Parameter>--mixed-context</Parameter>
+          </CEFCommandLine>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>話者別 自動カット割</Menu>
+          <Geometry>
+            <Size>
+              <Height>500</Height>
+              <Width>400</Width>
+            </Size>
+            <MinSize>
+              <Height>400</Height>
+              <Width>350</Width>
+            </MinSize>
+          </Geometry>
+          <Icons>
+          </Icons>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>
