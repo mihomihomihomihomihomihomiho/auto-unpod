@@ -142,10 +142,14 @@ function applyMulticamCuts(jsonPath) {
 
             $.writeln("Processing " + numClips + " clips on track");
 
-            // Debug: Write log to file
-            var logPath = "/tmp/multicam_debug.log";
+            // Debug: Write log to file (use Desktop for easier access)
+            var logPath = "~/Desktop/multicam_debug.log";
             var logFile = new File(logPath);
-            logFile.open('w');
+            if (!logFile.open('w')) {
+                $.writeln("ERROR: Failed to open log file at " + logPath);
+                result.error = "ログファイルの作成に失敗しました";
+                return JSON.stringify(result);
+            }
             logFile.writeln("=== Multicam Angle Switching Debug ===");
             logFile.writeln("Total clips: " + numClips);
             logFile.writeln("");
