@@ -12,6 +12,28 @@ window.addEventListener('load', function() {
     logInfo('拡張機能が読み込まれました');
 });
 
+// Convert file:// URL to absolute path
+function fileUrlToPath(fileUrl) {
+    // If it's not a file:// URL, return as-is
+    if (!fileUrl.startsWith('file://')) {
+        return fileUrl;
+    }
+
+    // Remove file:// prefix
+    let path = fileUrl.substring(7);
+
+    // Decode URL encoding (e.g., %E8%97%A4 → Japanese characters)
+    try {
+        path = decodeURIComponent(path);
+    } catch (e) {
+        console.warn('Failed to decode URL:', e);
+    }
+
+    // On Mac, paths start with / already
+    // On Windows, we need to handle drive letters
+    return path;
+}
+
 // File selection handler
 function selectFile(speakerType) {
     if (!csInterface) {
@@ -29,7 +51,12 @@ function selectFile(speakerType) {
     );
 
     if (result.err === window.cep.fs.NO_ERROR && result.data && result.data.length > 0) {
-        const filePath = result.data[0];
+        // Convert file:// URL to absolute path
+        const rawPath = result.data[0];
+        const filePath = fileUrlToPath(rawPath);
+
+        console.log('Selected file (raw):', rawPath);
+        console.log('Selected file (converted):', filePath);
 
         // Validate file
         if (!validateFile(filePath)) {
