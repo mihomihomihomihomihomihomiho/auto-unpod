@@ -99,15 +99,10 @@ function applyMulticamCuts(jsonPath) {
             // NEW APPROACH: Set keyframes on multicam clip instead of using razor
             var cuts = cutData.cuts;
 
-            // Debug: Write log to file (use Desktop for easier access)
-            var logPath = "~/Desktop/multicam_debug.log";
-            var logFile = new File(logPath);
-            if (!logFile.open('w')) {
-                $.writeln("ERROR: Failed to open log file at " + logPath);
-                result.error = "ログファイルの作成に失敗しました";
-                return JSON.stringify(result);
-            }
-            logFile.writeln("=== Multicam Keyframe Approach ===");
+            // Debug log to file - avoid encoding issues by only writing ASCII
+            var logFile = new File("~/Desktop/multicam_debug2.log");
+            logFile.open('w');
+            logFile.writeln("=== Multicam Keyframe Approach v2 ===");
             logFile.writeln("Total cuts: " + cuts.length);
             logFile.writeln("");
 
@@ -123,68 +118,78 @@ function applyMulticamCuts(jsonPath) {
             }
 
             var clip = multicamTrack.clips[0]; // Assuming single multicam clip
-            logFile.writeln("Clip name: " + clip.name);
             logFile.writeln("Clip type: " + clip.projectItem.type);
-            logFile.writeln("");
 
             // Find the Multicam effect component
             var components = clip.components;
             logFile.writeln("Total components: " + components.numItems);
+            logFile.writeln("");
 
+            // Strategy: Try each component and see if it has properties that look like camera controls
             var multicamComponent = null;
+            var cameraProperty = null;
+
             for (var i = 0; i < components.numItems; i++) {
                 var component = components[i];
-                logFile.writeln("Component " + i + ": " + component.displayName);
+                logFile.writeln("Component " + i + ":");
+                logFile.writeln("  matchName: " + component.matchName);
 
-                // Look for multicam-related component
-                if (component.displayName.indexOf("Multicam") !== -1 ||
-                    component.displayName.indexOf("マルチカメラ") !== -1) {
-                    multicamComponent = component;
-                    logFile.writeln("  -> Found multicam component!");
+                var props = component.properties;
+                logFile.writeln("  properties count: " + props.numItems);
+
+                // Check each property
+                for (var j = 0; j < props.numItems; j++) {
+                    var prop = props[j];
+                    logFile.writeln("    Property " + j + ":");
+                    logFile.writeln("      matchName: " + prop.matchName);
+
+                    // Try to check if this is a camera property by examining matchName (ASCII)
+                    var matchNameLower = prop.matchName.toLowerCase();
+                    if (matchNameLower.indexOf("camera") !== -1 ||
+                        matchNameLower.indexOf("angle") !== -1 ||
+                        matchNameLower.indexOf("multicam") !== -1) {
+                        logFile.writeln("      -> FOUND CAMERA PROPERTY!");
+                        multicamComponent = component;
+                        cameraProperty = prop;
+                        break;
+                    }
+                }
+
+                if (cameraProperty !== null) {
+                    logFile.writeln("  -> Selected component " + i + " as multicam component");
                     break;
                 }
-            }
-
-            if (!multicamComponent) {
                 logFile.writeln("");
-                logFile.writeln("ERROR: Multicam component not found");
-                logFile.close();
-                throw new Error("マルチカメラコンポーネントが見つかりませんでした");
             }
 
-            // Find the camera selection property
-            var properties = multicamComponent.properties;
-            logFile.writeln("");
-            logFile.writeln("Multicam component properties: " + properties.numItems);
-
-            var cameraProperty = null;
-            for (var i = 0; i < properties.numItems; i++) {
-                var prop = properties[i];
-                logFile.writeln("Property " + i + ": " + prop.displayName);
-
-                // Look for camera/angle selection property
-                if (prop.displayName.indexOf("Camera") !== -1 ||
-                    prop.displayName.indexOf("Angle") !== -1 ||
-                    prop.displayName.indexOf("カメラ") !== -1 ||
-                    prop.displayName.indexOf("アングル") !== -1) {
-                    cameraProperty = prop;
-                    logFile.writeln("  -> Found camera property!");
-                    break;
+            // If we couldn't find by matchName, try the first property of each component
+            if (cameraProperty === null) {
+                logFile.writeln("Could not find by matchName, trying first property of each component...");
+                for (var i = 0; i < components.numItems; i++) {
+                    var component = components[i];
+                    if (component.properties.numItems > 0) {
+                        logFile.writeln("Trying component " + i + ", property 0");
+                        multicamComponent = component;
+                        cameraProperty = component.properties[0];
+                        break;
+                    }
                 }
             }
 
             if (!cameraProperty) {
                 logFile.writeln("");
-                logFile.writeln("ERROR: Camera property not found");
+                logFile.writeln("ERROR: Could not find any suitable property");
                 logFile.close();
                 throw new Error("カメラ選択プロパティが見つかりませんでした");
             }
 
             // Set keyframes for each cut
             logFile.writeln("");
-            logFile.writeln("Setting keyframes...");
+            logFile.writeln("Attempting to set keyframes on property...");
 
             var keyframesSet = 0;
+            var firstError = null;
+
             for (var i = 0; i < cuts.length; i++) {
                 var cut = cuts[i];
                 var timeTicks = secondsToTicks(cut.startTime);
@@ -195,14 +200,13 @@ function applyMulticamCuts(jsonPath) {
                     cameraProperty.setValueAtTime(timeTicks, camera);
                     keyframesSet++;
 
-                    if (i < 5 || i >= cuts.length - 5) {
-                        logFile.writeln("Keyframe " + i + ": camera=" + camera + " at " + cut.startTime + "s");
+                    if (i < 3) {
+                        logFile.writeln("Keyframe " + i + ": camera=" + camera + " at " + cut.startTime + "s - SUCCESS");
                     }
                 } catch (e) {
-                    logFile.writeln("ERROR setting keyframe " + i + ": " + e.toString());
-                    if (keyframesSet === 0 && i < 10) {
-                        // Log first few errors in detail
-                        $.writeln("Failed to set keyframe at " + cut.startTime + "s: " + e.toString());
+                    if (firstError === null) {
+                        firstError = e.toString();
+                        logFile.writeln("ERROR setting keyframe " + i + ": " + e.toString());
                     }
                 }
             }
@@ -210,6 +214,9 @@ function applyMulticamCuts(jsonPath) {
             result.cutsApplied = keyframesSet;
             logFile.writeln("");
             logFile.writeln("Total keyframes set: " + keyframesSet);
+            if (firstError !== null) {
+                logFile.writeln("First error: " + firstError);
+            }
             logFile.close();
 
             result.success = true;
